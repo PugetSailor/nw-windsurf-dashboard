@@ -56,7 +56,7 @@ details.fold + details.fold, section + details.fold { margin-top:10px }
 <p class="sub">A long-distance race once around Mercer Island on Lake Washington, counterclockwise from Newcastle Beach Park, run by the nw-windtalk group on a south-wind day each fall. Longboards, windfoils and wingfoils race the same course, about 25 km by the shortest line.</p>
 <nav class="jump"><a href="#replay">Watch the race</a><a href="#analysis">Race analysis</a><a href="#reports">Rider reports</a><a href="#lessons">Lessons</a><a href="#line">Suggested line</a><a href="#results">Past results</a><a href="#bail">Bail-outs</a></nav></header>
 <!--replay2026--><section class="card rp-hero" id="replay"><h2>Watch the 2026 race</h2>
-<p class="note2" style="margin:0 0 10px">Three longboards around Mercer Island, with race commentary. Each rider's clock starts as they cross the start line, so you see them as if they'd started together (Stefan actually started about 90 seconds after the other two). Press Go. The commentary uses your browser's own voice; on an iPhone, turn off silent mode to hear it.</p>
+<p class="note2" style="margin:0 0 10px">Three longboards around Mercer Island, with race commentary. Each rider's clock starts as they cross the start line, so you see them as if they'd started together (Stefan actually started about 90 seconds after the other two). Press Go. The commentary uses your browser's own voice. No sound on an iPhone? Turn Silent Mode off (the ring/silent switch or Action button), turn the volume up, and open the page in Safari rather than inside another app.</p>
 <div class="rp-bar"><button type="button" id="rp-go">Go</button><button type="button" id="rp-reset" class="rp-sec">Reset</button>
 <label>Speed <select id="rp-speed"><option value="60">60×</option><option value="120" selected>120×</option><option value="240">240×</option></select></label>
 <label><input type="checkbox" id="rp-voice" checked> Commentary voice</label>
@@ -103,12 +103,18 @@ details.fold + details.fold, section + details.fold { margin-top:10px }
   let t = 0, playing = false, last = 0, nextEv = 0, voice = null, boardHtml = "";
   const pick = () => { const v = speechSynthesis.getVoices(); voice = v.find(x => /en[-_](GB|US)/i.test(x.lang) && /male|daniel|alex|google uk/i.test(x.name)) || v.find(x => /^en/i.test(x.lang)) || null; };
   if ("speechSynthesis" in window) { pick(); speechSynthesis.onvoiceschanged = pick; } else { $("rp-voice").checked = false; $("rp-voice").disabled = true; }
+  const keep = [];                                                   // iOS drops utterances that get garbage-collected
+  const speak = text => {
+    const u = new SpeechSynthesisUtterance(text); u.lang = "en-US"; u.rate = 1.05; u.volume = 1;
+    if (voice && voice.localService !== false) u.voice = voice;
+    keep.push(u); if (keep.length > 5) keep.shift();
+    speechSynthesis.speak(u);
+  };
   const say = text => {
     $("rp-caption").textContent = text;
     if (!$("rp-voice").checked || !("speechSynthesis" in window)) return;
-    if (speechSynthesis.pending) speechSynthesis.cancel();          // stay current: drop a backlog at high speed
-    const u = new SpeechSynthesisUtterance(text); u.rate = 1.08; u.pitch = 1; if (voice) u.voice = voice;
-    speechSynthesis.speak(u);
+    if (speechSynthesis.pending) { speechSynthesis.cancel(); setTimeout(() => speak(text), 120); return; }  // Safari loses a speak() right after cancel()
+    speak(text);
   };
   const at = (pts, s) => {
     if (s >= pts[pts.length - 1][0]) return [pts.length - 1, pts[pts.length - 1][1], pts[pts.length - 1][2]];
@@ -139,9 +145,8 @@ details.fold + details.fold, section + details.fold { margin-top:10px }
     requestAnimationFrame(tick);
   };
   $("rp-go").onclick = () => {
-    if (playing) { playing = false; $("rp-go").textContent = "Go"; if ("speechSynthesis" in window) speechSynthesis.pause(); return; }
+    if (playing) { playing = false; $("rp-go").textContent = "Go"; if ("speechSynthesis" in window) speechSynthesis.cancel(); return; }
     if (t >= end) { t = 0; nextEv = 0; }
-    if ("speechSynthesis" in window) speechSynthesis.resume();
     playing = true; $("rp-go").textContent = "Pause"; last = performance.now();
     if (nextEv === 0) say(D.events[nextEv++][1]);                     // first line inside the click, so iOS allows speech
     requestAnimationFrame(tick);
